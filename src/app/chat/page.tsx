@@ -24,7 +24,45 @@ interface Conversation {
   id: string;
   title: string;
   updatedAt: string;
+  streamerId: string | null;
+  serialNumber: number;
+  displayName: string | null;
+  displayPhoto: string | null;
+  lastMessage: { content: string; createdAt: string } | null;
+  streamerInfo: Record<string, string> | null;
 }
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const d = new Date(dateStr).getTime();
+  const diff = now - d;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  const date = new Date(dateStr);
+  return `${(date.getMonth() + 1).toString().padStart(2, "0")}-${date.getDate().toString().padStart(2, "0")}`;
+}
+
+const DEFAULT_SIDEBAR_AVATAR = (
+  <svg viewBox="0 0 100 100" className="w-full h-full">
+    <ellipse cx="50" cy="38" rx="35" ry="38" fill="#4A3728" />
+    <path d="M15 35 Q15 10 50 8 Q85 10 85 35" fill="#4A3728" />
+    <circle cx="50" cy="42" r="28" fill="#FDE8D0" />
+    <path d="M25 35 Q35 25 50 28 Q65 25 75 35" fill="#4A3728" />
+    <ellipse cx="38" cy="42" rx="4" ry="5" fill="#333" />
+    <ellipse cx="62" cy="42" rx="4" ry="5" fill="#333" />
+    <ellipse cx="38" cy="41" rx="2" ry="2" fill="white" />
+    <ellipse cx="62" cy="41" rx="2" ry="2" fill="white" />
+    <ellipse cx="32" cy="50" rx="5" ry="3" fill="#FFB5B5" opacity="0.5" />
+    <ellipse cx="68" cy="50" rx="5" ry="3" fill="#FFB5B5" opacity="0.5" />
+    <path d="M40 54 Q50 62 60 54" fill="none" stroke="#D4756B" strokeWidth="2" strokeLinecap="round" />
+    <path d="M35 68 Q50 65 65 68 L62 95 Q50 100 38 95Z" fill="#FDE8D0" />
+  </svg>
+);
 
 export default function ChatPage() {
   const { user, loading } = useAuth();
@@ -408,29 +446,68 @@ export default function ChatPage() {
             新建对话
           </button>
         </div>
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations.map((conv) => (
-            <div key={conv.id} className="group relative">
-              <button
-                onClick={() => loadConversation(conv.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                  currentConversationId === conv.id
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                } truncate`}
-              >
-                {conv.title || "新对话"}
-              </button>
-              <button
-                onClick={() => deleteConversation(conv.id)}
-                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            </div>
-          ))}
+        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {conversations.map((conv) => {
+            const convName =
+              conv.displayName || `主播${conv.serialNumber.toString().padStart(4, "0")}`;
+            const timeStr = conv.lastMessage
+              ? formatRelativeTime(conv.lastMessage.createdAt)
+              : "";
+            return (
+              <div key={conv.id} className="group relative">
+                <button
+                  onClick={() => loadConversation(conv.id)}
+                  className={`w-full text-left px-2.5 py-2 rounded-lg transition-colors ${
+                    currentConversationId === conv.id
+                      ? "bg-indigo-50"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {/* Avatar */}
+                    <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200 mt-0.5">
+                      {conv.displayPhoto ? (
+                        <img src={conv.displayPhoto} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        DEFAULT_SIDEBAR_AVATAR
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Name + time */}
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={`text-sm font-medium truncate ${
+                          currentConversationId === conv.id
+                            ? "text-indigo-700"
+                            : "text-gray-800"
+                        }`}>
+                          {convName}
+                        </span>
+                        {timeStr && (
+                          <span className="text-[10px] text-gray-400 flex-shrink-0">{timeStr}</span>
+                        )}
+                      </div>
+                      {/* Last message */}
+                      {conv.lastMessage ? (
+                        <p className="text-xs text-gray-400 truncate mt-0.5">
+                          {conv.lastMessage.content}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-300 mt-0.5">暂无提问</p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => deleteConversation(conv.id)}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
         </nav>
       </aside>
 

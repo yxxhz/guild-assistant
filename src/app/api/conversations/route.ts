@@ -40,14 +40,61 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ conversation });
     }
 
-    // List all conversations
+    // List all conversations with last user message and serial number
     const conversations = await prisma.conversation.findMany({
       where: { userId: session.userId },
       orderBy: { updatedAt: "desc" },
       take: 50,
+      include: {
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          where: { role: "user" },
+          select: { content: true, createdAt: true },
+        },
+      },
     });
 
-    return NextResponse.json({ conversations });
+    // Stable serial number based on creation order
+    const allIds = await prisma.conversation.findMany({
+      where: { userId: session.userId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    const serialNumbers = new Map<string, number>();
+    allIds.forEach((c, i) => serialNumbers.set(c.id, i + 1));
+
+    // Batch fetch live streamer data for sidebar display
+    const linkedIds = conversations
+      .map((c) => c.streamerId)
+      .filter((id): id is string => id !== null);
+    const liveStreamers =
+      linkedIds.length > 0
+        ? await prisma.streamer.findMany({
+            where: { id: { in: linkedIds } },
+            select: { id: true, name: true, photo: true },
+          })
+        : [];
+    const liveStreamerMap = new Map(liveStreamers.map((s) => [s.id, s]));
+
+    const result = conversations.map((c) => {
+      const info = c.streamerInfo ? JSON.parse(c.streamerInfo) : {};
+      const live = c.streamerId ? liveStreamerMap.get(c.streamerId) : undefined;
+      return {
+        id: c.id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        streamerId: c.streamerId,
+        serialNumber: serialNumbers.get(c.id) || 0,
+        lastMessage: c.messages[0] || null,
+        // Live streamer data if linked, fallback to cached streamerInfo
+        displayName: live?.name || info.name || null,
+        displayPhoto: live?.photo || info.photo || null,
+        streamerInfo: info,
+      };
+    });
+
+    return NextResponse.json({ conversations: result });
   } catch (error) {
     console.error("Conversations error:", error);
     return NextResponse.json(
