@@ -26,13 +26,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "对话不存在" }, { status: 404 });
     }
 
+    // Always fetch live data from Streamer table when linked,
+    // so changes in streamer management are immediately reflected
+    if (conversation.streamerId) {
+      const streamer = await prisma.streamer.findUnique({
+        where: { id: conversation.streamerId },
+      });
+      if (streamer) {
+        const fields = ["name", "age", "phone", "address", "photo", "photos", "resume", "bio", "stage"];
+        const info: Record<string, string> = {};
+        for (const field of fields) {
+          if (streamer[field as keyof typeof streamer]) {
+            info[field] = streamer[field as keyof typeof streamer] as string;
+          }
+        }
+        return NextResponse.json({
+          streamerInfo: info,
+          streamerId: conversation.streamerId,
+        });
+      }
+    }
+
+    // Fallback: no linked streamer — return conversation's cached info
     const info = conversation.streamerInfo
       ? JSON.parse(conversation.streamerInfo)
       : {};
 
     return NextResponse.json({
       streamerInfo: info,
-      streamerId: conversation.streamerId || null,
+      streamerId: null,
     });
   } catch (error) {
     console.error("Get streamer info error:", error);
