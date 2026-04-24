@@ -47,6 +47,8 @@ export default function ChatPage() {
     suggestionId: string;
     messageId: string;
   } | null>(null);
+  // Map suggestionId → messageId for per-card polish preview lookup
+  const [selectedMsgMap, setSelectedMsgMap] = useState<Record<string, string>>({});
   const [streamerInfo, setStreamerInfo] = useState<Record<string, string> | null>(null);
 
   const tones = [
@@ -82,7 +84,12 @@ export default function ChatPage() {
     setCurrentConversationId(id);
     setSuggestions([]);
     setSelectedInfo(null);
+    setSelectedMsgMap({});
     setShownFaqIds(new Set());
+
+    // Restore saved tone for this conversation
+    const savedTone = localStorage.getItem(`tone-${id}`);
+    if (savedTone) setSelectedTone(savedTone);
 
     // Load streamer info
     fetch(`/api/conversations/streamer?conversationId=${id}`)
@@ -108,6 +115,7 @@ export default function ChatPage() {
     setReasoning("");
     setInput("");
     setSelectedInfo(null);
+    setSelectedMsgMap({});
     setShownFaqIds(new Set());
     setStreamerInfo(null);
   };
@@ -121,6 +129,7 @@ export default function ChatPage() {
     setSubmitting(true);
     setSuggestions([]);
     setSelectedInfo(null);
+    setSelectedMsgMap({});
     setShownFaqIds(new Set());
 
     const tempId = "temp-" + Date.now();
@@ -176,28 +185,26 @@ export default function ChatPage() {
 
     let finalContent = s.content;
 
-    // Polish if tone is not natural
-    if (selectedTone !== "natural") {
-      setPolishingId(s.id);
-      try {
-        const res = await fetch("/api/polish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: s.content,
-            tone: selectedTone,
-            streamerInfo,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          finalContent = data.polished || s.content;
-        }
-      } catch (err) {
-        console.error("Polishing error:", err);
-      } finally {
-        setPolishingId(null);
+    // Always polish before copy (including natural tone, which incorporates streamer info)
+    setPolishingId(s.id);
+    try {
+      const res = await fetch("/api/polish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: s.content,
+          tone: selectedTone,
+          streamerInfo,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        finalContent = data.polished || s.content;
       }
+    } catch (err) {
+      console.error("Polishing error:", err);
+    } finally {
+      setPolishingId(null);
     }
 
     // Add as assistant message
@@ -207,6 +214,7 @@ export default function ChatPage() {
       { id: msgId, role: "assistant", content: finalContent },
     ]);
     setSelectedInfo({ suggestionId: s.id, messageId: msgId });
+    setSelectedMsgMap((prev) => ({ ...prev, [s.id]: msgId }));
 
     // Copy to clipboard
     try {
@@ -257,7 +265,7 @@ export default function ChatPage() {
 
   // Re-polish when tone changes after selection
   useEffect(() => {
-    if (!selectedInfo || selectedTone === "natural") return;
+    if (!selectedInfo) return;
 
     const s = suggestions.find((x) => x.id === selectedInfo.suggestionId);
     if (!s || s.feedback?.action !== "selected") return;
@@ -498,7 +506,9 @@ export default function ChatPage() {
                     key={tone.value}
                     onClick={() => {
                       setSelectedTone(tone.value);
-                      // Also set copied timeout marker
+                      if (currentConversationId) {
+                        localStorage.setItem(`tone-${currentConversationId}`, tone.value);
+                      }
                     }}
                     className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
                       selectedTone === tone.value
@@ -576,22 +586,18 @@ export default function ChatPage() {
                           <button
                             onClick={() => selectSuggestion(s)}
                             disabled={isRejected}
-                            className={`flex-shrink-0 px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 ${
-                              selectedTone !== "natural"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-                                : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"
-                            }`}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                             </svg>
-                            复制
+                            润色并复制
                           </button>
                         )}
                       </div>
 
-                      {/* Row 2: Polish preview (when tone is selected and suggestion is selected) */}
-                      {isSelected && selectedTone !== "natural" && (
+                      {/* Row 2: Polish preview (when suggestion is selected) */}
+                      {isSelected && (
                         <div className="px-4 pb-3 ml-10">
                           <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                             <div className="flex items-center gap-1 mb-1">
@@ -603,7 +609,7 @@ export default function ChatPage() {
                               )}
                             </div>
                             <p className="text-sm text-amber-800 whitespace-pre-wrap">
-                              {isPolishing ? "润色中..." : messages.find((m) => m.id === selectedInfo?.messageId)?.content || s.content}
+                              {isPolishing ? "润色中..." : messages.find((m) => m.id === selectedMsgMap[s.id])?.content || s.content}
                             </p>
                           </div>
                         </div>

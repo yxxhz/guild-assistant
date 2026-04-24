@@ -99,6 +99,7 @@ export default function StreamersPage() {
   });
   const [saving, setSaving] = useState(false);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const [showDeleteMode, setShowDeleteMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resumeInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -145,7 +146,7 @@ export default function StreamersPage() {
       return {
         ...prev,
         photos: updated,
-        photo: prev.photo || updated[0] || "",
+        photo: prev.photo || updated[updated.length - 1] || "",
       };
     });
   };
@@ -198,15 +199,12 @@ export default function StreamersPage() {
   const removePhoto = (idx: number) => {
     setFormData((prev) => {
       const updated = prev.photos.filter((_, i) => i !== idx);
-      const currentPhotoIdx = prev.photos.indexOf(prev.photo);
-      const newPhoto =
-        idx === currentPhotoIdx
-          ? updated[0] || ""
-          : prev.photo;
+      const currentPhotoUrl = prev.photos[idx];
+      const isRemovingAvatar = prev.photo === currentPhotoUrl;
       return {
         ...prev,
         photos: updated,
-        photo: newPhoto,
+        photo: isRemovingAvatar ? (updated[updated.length - 1] || "") : prev.photo,
       };
     });
     if (previewIdx === idx) setPreviewIdx(null);
@@ -385,13 +383,32 @@ export default function StreamersPage() {
                       <span className="text-xs text-gray-500">
                         共 {formData.photos.length} 张
                       </span>
-                      <span className="text-xs text-gray-400">
-                        （点击图片放大预览，点击"头像"设为当前头像）
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteMode(!showDeleteMode)}
+                        className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+                          showDeleteMode
+                            ? "bg-red-100 text-red-600 border border-red-200"
+                            : "bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200"
+                        }`}
+                      >
+                        {showDeleteMode ? "完成" : "管理"}
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {formData.photos.map((url, idx) => (
                         <div key={idx} className="relative group">
+                          {showDeleteMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); removePhoto(idx); }}
+                              className="absolute -top-1.5 -right-1.5 z-10 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow"
+                            >
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
                           <div
                             onClick={() => setPreviewIdx(idx)}
                             className={`w-16 h-16 rounded-lg overflow-hidden border-2 cursor-pointer transition-all hover:opacity-90 ${
@@ -402,35 +419,27 @@ export default function StreamersPage() {
                           >
                             <img src={url} alt="" className="w-full h-full object-cover" />
                           </div>
-                          {/* Avatar badge */}
-                          {formData.photo === url && (
-                            <div className="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white rounded-full p-0.5">
+                          {/* Avatar badge (top-right checkmark for current avatar) */}
+                          {formData.photo === url && !showDeleteMode && (
+                            <div className="absolute -top-1.5 -right-1.5 bg-indigo-500 text-white rounded-full p-0.5 shadow">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                               </svg>
                             </div>
                           )}
-                          {/* Hover actions */}
-                          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 rounded-lg">
-                            {formData.photo !== url && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); selectAvatar(idx); }}
-                                className="text-white bg-indigo-600 hover:bg-indigo-700 text-[10px] px-1.5 py-0.5 rounded"
-                                title="设为头像"
-                              >
-                                头像
-                              </button>
-                            )}
+                          {/* Set as avatar icon (bottom-right, only on non-avatar) */}
+                          {formData.photo !== url && !showDeleteMode && (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); removePhoto(idx); }}
-                              className="text-white bg-red-500 hover:bg-red-600 text-[10px] px-1.5 py-0.5 rounded"
-                              title="删除"
+                              onClick={(e) => { e.stopPropagation(); selectAvatar(idx); }}
+                              className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-indigo-50 hover:border-indigo-300 shadow-sm transition-colors"
+                              title="设为主头像"
                             >
-                              删除
+                              <svg className="w-3 h-3 text-gray-400 hover:text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                              </svg>
                             </button>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>

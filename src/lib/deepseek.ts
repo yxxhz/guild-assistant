@@ -168,7 +168,7 @@ export async function polishContent(
   tone: string,
   streamerInfo?: Record<string, string>
 ): Promise<string> {
-  if (!deepseek || tone === "natural") {
+  if (!deepseek) {
     return content;
   }
 
@@ -182,6 +182,8 @@ export async function polishContent(
     : "";
 
   const tonePrompts: Record<string, string> = {
+    natural:
+      "你是一个直播公会经纪人，正在和主播候选人微信聊天。请用自然的口语化表达改写以下话术，保持原意不变，语气自然真实，像日常聊天一样。如果提供了对方信息，可以在话术中自然地提及（如称呼对方名字），不要生硬插入。",
     lively:
       "你是一个直播公会经纪人，正在和主播候选人微信聊天。请用自然的口语化表达改写以下话术，语气活泼轻快，像日常聊天一样自然，不要过于夸张，不要加过多表情符号，保持信息准确完整。",
     cute:

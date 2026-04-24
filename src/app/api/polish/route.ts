@@ -18,10 +18,6 @@ export async function POST(request: NextRequest) {
     const validTones = ["natural", "lively", "cute", "professional", "gentle"];
     const selectedTone = validTones.includes(tone) ? tone : "natural";
 
-    if (selectedTone === "natural") {
-      return NextResponse.json({ polished: content });
-    }
-
     const polished = await polishContent(content, selectedTone, streamerInfo);
 
     return NextResponse.json({ polished });
