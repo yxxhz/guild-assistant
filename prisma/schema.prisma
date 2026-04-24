@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  name      String?
+  role      String   @default("broker") // broker, operator, admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations Conversation[]
+  feedbacks     SuggestionFeedback[]
+  streamers     Streamer[]
+}
+
+model Streamer {
+  id        String         @id @default(uuid())
+  name      String?
+  age       String?
+  phone     String?
+  address   String?
+  photo     String?        // avatar URL (primary photo)
+  photos    String?        // JSON array of all uploaded image data URLs
+  resume    String?        // file data URL (PDF/Word/image)
+  bio       String?        // multi-line personal experience
+  stage     String?        // initial, interested, negotiation, visit, signed, closed
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  conversations Conversation[]
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  title     String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  streamerId String?
+  streamer  Streamer? @relation(fields: [streamerId], references: [id])
+  streamerInfo String? // JSON: snapshot of streamer fields for this conversation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  role           String       // user, assistant, system
+  content        String
+  createdAt      DateTime     @default(now())
+
+  suggestions Suggestion[]
+}
+
+model KnowledgeBase {
+  id          String   @id @default(uuid())
+  category    String   @default("general") // general, platform-rule, op-skill, industry-data
+  question    String
+  answer      String
+  keywords    String?  // comma-separated keywords
+  usageCount  Int      @default(0)
+  weight      Int      @default(0) // higher = preferred when matched
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Suggestion {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id])
+  content   String   // the suggested response text
+  label     String   // A, B, C
+  createdAt DateTime @default(now())
+
+  feedback SuggestionFeedback?
+}
+
+model SuggestionFeedback {
+  id           String     @id @default(uuid())
+  suggestionId String     @unique
+  suggestion   Suggestion @relation(fields: [suggestionId], references: [id])
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  action       String     // selected, rejected, refresh
+  createdAt    DateTime   @default(now())
+}
+
+model InteractionLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  type      String   // query, suggestion, feedback, generation
+  input     String?  // user input
+  output    String?  // system output
+  metadata  String?  // JSON string for additional data
+  createdAt DateTime @default(now())
+}
